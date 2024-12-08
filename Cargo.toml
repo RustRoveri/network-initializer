@@ -1,0 +1,11 @@
+[package]
+name = "network-initializer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+toml = "0.8.19"
+rust-roveri = { path = "../rust-roveri/" }
+wg_2024.workspace = true
+crossbeam-channel.workspace = true
+ahash = "0.8.11"

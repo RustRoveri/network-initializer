@@ -4,8 +4,12 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+rust-roveri-api = { git = "ssh://git@github.com/RustRoveri/rust-roveri-api.git" }
+simulation-controller = { git = "ssh://git@github.com/RustRoveri/simulation-controller.git" }
+client = { git = "ssh://git@github.com/RustRoveri/client.git" } 
+server = { git = "ssh://git@github.com/RustRoveri/server.git" }
+
+wg_2024 = { git = "https://github.com/WGL-2024/WGL_repo_2024.git", features = ["serialize"] }
+
 toml = "0.8.19"
-rust-roveri = { path = "../rust-roveri/" }
-wg_2024.workspace = true
-crossbeam-channel.workspace = true
-fixedbitset = "0.5.7"
+crossbeam-channel = "0.5.13"

@@ -1,9 +1,8 @@
 use std::{collections::VecDeque, fs};
 
 use fixedbitset::FixedBitSet;
+use rust_roveri_api::MAX_NODES;
 use wg_2024::config::{Client, Config, Drone, Server};
-
-const MAX_NODES: usize = 256;
 
 type Graph = [FixedBitSet; MAX_NODES];
 
@@ -11,7 +10,7 @@ type Graph = [FixedBitSet; MAX_NODES];
 /// 
 /// # Parameters 
 /// - `file_path` - Path of the configuration file.
-pub fn network_init(file_path: &str) -> Result<Config, String> {
+pub fn network_validate(file_path: &str) -> Result<Config, String> {
     // Deserializing the config file
     let config_data =
         fs::read_to_string(file_path)
@@ -158,7 +157,7 @@ fn validate_client(client: &Client) -> Result<(), String> {
     Ok(())
 }
 
-/// Checks if the server is connected to at least 1 node and at max 2 nodes, and that its neighbors list does not   
+/// Checks if the server is connected to at least 2 nodes, and that its neighbors list does not   
 /// contain duplicates.  
 /// 
 /// # Parameters 
@@ -169,7 +168,7 @@ fn validate_client(client: &Client) -> Result<(), String> {
 fn validate_server(server: &Server) -> Result<(), String> {
     // Checks if the server is connected to n > 2 drones
     if server.connected_drone_ids.len() < 2 {
-        return Err(format!("Server [{}] has less than 2 neighbors", server.id).into());
+        return Err(format!("Server [{}] has less than 2 neighbors", server.id));
     }
 
     // Checks if the server itself is in the list of its neighbors and if there are not duplicates in the list

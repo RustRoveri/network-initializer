@@ -9,12 +9,12 @@ use simulation_controller::factory::function::factory_drone;
 use wg_2024::{config::Config, controller::{DroneCommand, DroneEvent}, network::NodeId, packet::Packet};
 
 pub struct NetworkInitData {
-    init_data: InitData,
-    drone_channels: DroneChannels,
-    client_channels: ClientChannels,
-    server_channels: ServerChannels,
-    list_gui_channels: Vec<(NodeId, ClientType, Sender<GuiClientMessage>, Receiver<ClientGuiMessage>)>,
-    distros: Distros
+    pub init_data: InitData,
+    pub drone_channels: DroneChannels,
+    pub client_channels: ClientChannels,
+    pub server_channels: ServerChannels,
+    pub list_gui_channels: Vec<(NodeId, ClientType, Sender<GuiClientMessage>, Receiver<ClientGuiMessage>)>,
+    pub distros: Distros
 }
 
 impl NetworkInitData {

@@ -971,18 +971,14 @@ mod test {
         const DRONE_1_ID: NodeId = 73;
         const DRONE_2_ID: NodeId = 74;
         let drone = vec![];
-        let client = vec![
-            Client {
-                id: CLIENT_ID,
-                connected_drone_ids: vec![SERVER_ID],
-            },
-        ];
-        let server = vec![
-            Server {
-                id: SERVER_ID,
-                connected_drone_ids: vec![DRONE_1_ID, DRONE_2_ID],
-            },
-        ];
+        let client = vec![Client {
+            id: CLIENT_ID,
+            connected_drone_ids: vec![SERVER_ID],
+        }];
+        let server = vec![Server {
+            id: SERVER_ID,
+            connected_drone_ids: vec![DRONE_1_ID, DRONE_2_ID],
+        }];
         let config_before = Config {
             drone,
             client,
@@ -997,6 +993,159 @@ mod test {
                 "Client [{}] is connected to [{}], which is not a drone",
                 CLIENT_ID, SERVER_ID
             ))
+        );
+    }
+
+    #[test]
+    fn test_validate_server_server_connection() {
+        const SERVER_1_ID: NodeId = 71;
+        const SERVER_2_ID: NodeId = 72;
+        const DRONE_1_ID: NodeId = 73;
+        const DRONE_2_ID: NodeId = 74;
+        let drone = vec![
+            Drone {
+                id: DRONE_1_ID,
+                connected_node_ids: vec![],
+                pdr: 0.0,
+            },
+            Drone {
+                id: DRONE_2_ID,
+                connected_node_ids: vec![],
+                pdr: 0.0,
+            },
+        ];
+        let client = vec![];
+        let server = vec![
+            Server {
+                id: SERVER_1_ID,
+                connected_drone_ids: vec![DRONE_1_ID, SERVER_2_ID],
+            },
+            Server {
+                id: SERVER_2_ID,
+                connected_drone_ids: vec![DRONE_1_ID, DRONE_2_ID],
+            },
+        ];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Server [{}] is connected to [{}], which is not a drone",
+                SERVER_1_ID, SERVER_2_ID
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_unexistent_neighbor() {
+        const DRONE_ID: NodeId = 71;
+        const UNEXISTENT_ID: NodeId = 72;
+        let drone = vec![Drone {
+            id: DRONE_ID,
+            connected_node_ids: vec![UNEXISTENT_ID],
+            pdr: 0.0,
+        }];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Node [{}] has [{}] as neighbor, which does not exist in the topology.",
+                DRONE_ID, UNEXISTENT_ID,
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_bidirectional_connections() {
+        const DRONE_1_ID: NodeId = 71;
+        const DRONE_2_ID: NodeId = 72;
+        let drone = vec![
+            Drone {
+                id: DRONE_1_ID,
+                connected_node_ids: vec![DRONE_2_ID],
+                pdr: 0.0,
+            },
+            Drone {
+                id: DRONE_2_ID,
+                connected_node_ids: vec![],
+                pdr: 0.0,
+            },
+        ];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                    "The topology is not bidirectional: node [{}] is reachable from [{}], but not vice versa.",
+                DRONE_2_ID, DRONE_1_ID
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_connected_graph() {
+        const DRONE_1_ID: NodeId = 71;
+        const DRONE_2_ID: NodeId = 72;
+        const DRONE_3_ID: NodeId = 73;
+        const DRONE_4_ID: NodeId = 74;
+        let drone = vec![
+            Drone {
+                id: DRONE_1_ID,
+                connected_node_ids: vec![DRONE_2_ID],
+                pdr: 0.0,
+            },
+            Drone {
+                id: DRONE_2_ID,
+                connected_node_ids: vec![DRONE_1_ID],
+                pdr: 0.0,
+            },
+            Drone {
+                id: DRONE_3_ID,
+                connected_node_ids: vec![DRONE_4_ID],
+                pdr: 0.0,
+            },
+            Drone {
+                id: DRONE_4_ID,
+                connected_node_ids: vec![DRONE_3_ID],
+                pdr: 0.0,
+            },
+        ];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err("The network topology is not connected".to_string())
         );
     }
 }

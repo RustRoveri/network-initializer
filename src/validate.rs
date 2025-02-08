@@ -19,6 +19,7 @@ pub fn network_validate(file_path: &str) -> Result<Config, String> {
     // Read the configuration file as a string.
     let config_data = fs::read_to_string(file_path)
         .map_err(|_| "Unable to read configuration file".to_string())?;
+
     // Deserialize the TOML data into a Config.
     let config: Config =
         toml::from_str(&config_data).map_err(|e| format!("Failed to deserialize TOML: {}", e))?;
@@ -406,5 +407,596 @@ fn validate_edges_clients_servers(
         Ok(())
     } else {
         Err("Clients and servers are not all on the edge of the network".to_string())
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::network_init;
+    use crate::network_validate;
+    use crate::validate::validate_config;
+    use std::{env, fs};
+    use wg_2024::config::{Client, Config, Drone, Server};
+    use wg_2024::network::NodeId;
+
+    #[test]
+    fn test_validate() {
+        let drone = vec![
+            Drone {
+                id: 4,
+                connected_node_ids: vec![1, 2, 3, 5, 6, 7, 11],
+                pdr: 0.027,
+            },
+            Drone {
+                id: 6,
+                connected_node_ids: vec![4, 7, 11, 10],
+                pdr: 0.019,
+            },
+            Drone {
+                id: 7,
+                connected_node_ids: vec![6, 9, 8, 4],
+                pdr: 0.124,
+            },
+            Drone {
+                id: 8,
+                connected_node_ids: vec![7, 15, 16],
+                pdr: 0.133,
+            },
+            Drone {
+                id: 9,
+                connected_node_ids: vec![7, 15, 10, 16],
+                pdr: 0.197,
+            },
+            Drone {
+                id: 10,
+                connected_node_ids: vec![6, 9, 13, 14],
+                pdr: 0.128,
+            },
+            Drone {
+                id: 11,
+                connected_node_ids: vec![5, 4, 6, 12, 13],
+                pdr: 0.111,
+            },
+            Drone {
+                id: 13,
+                connected_node_ids: vec![11, 12, 10, 20],
+                pdr: 0.174,
+            },
+            Drone {
+                id: 14,
+                connected_node_ids: vec![10, 15, 18, 20, 19],
+                pdr: 0.296,
+            },
+            Drone {
+                id: 15,
+                connected_node_ids: vec![9, 16, 14, 17, 8],
+                pdr: 0.379,
+            },
+            Drone {
+                id: 18,
+                connected_node_ids: vec![17, 14, 19, 23],
+                pdr: 0.188,
+            },
+            Drone {
+                id: 20,
+                connected_node_ids: vec![12, 13, 14, 19, 22, 21],
+                pdr: 0.345,
+            },
+            Drone {
+                id: 21,
+                connected_node_ids: vec![20, 26, 25],
+                pdr: 0.231,
+            },
+            Drone {
+                id: 22,
+                connected_node_ids: vec![20, 24, 23],
+                pdr: 0.086,
+            },
+        ];
+        let client = vec![
+            Client {
+                id: 1,
+                connected_drone_ids: vec![4],
+            },
+            Client {
+                id: 2,
+                connected_drone_ids: vec![4],
+            },
+            Client {
+                id: 3,
+                connected_drone_ids: vec![4],
+            },
+            Client {
+                id: 24,
+                connected_drone_ids: vec![22],
+            },
+            Client {
+                id: 25,
+                connected_drone_ids: vec![21],
+            },
+            Client {
+                id: 26,
+                connected_drone_ids: vec![21],
+            },
+        ];
+        let server = vec![
+            Server {
+                id: 5,
+                connected_drone_ids: vec![4, 11],
+            },
+            Server {
+                id: 12,
+                connected_drone_ids: vec![11, 13, 20],
+            },
+            Server {
+                id: 19,
+                connected_drone_ids: vec![20, 14, 18],
+            },
+            Server {
+                id: 23,
+                connected_drone_ids: vec![18, 22],
+            },
+            Server {
+                id: 17,
+                connected_drone_ids: vec![15, 18],
+            },
+            Server {
+                id: 16,
+                connected_drone_ids: vec![8, 9, 15],
+            },
+        ];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        match result {
+            Ok(()) => {}
+            Err(err) => panic!("{}", err),
+        };
+    }
+
+    #[test]
+    fn test_validate_duplicate_id_1() {
+        const DUPLICATE_ID: NodeId = 70;
+
+        let drone = vec![
+            Drone {
+                id: DUPLICATE_ID,
+                connected_node_ids: vec![1, 2, 3],
+                pdr: 0.1,
+            },
+            Drone {
+                id: DUPLICATE_ID,
+                connected_node_ids: vec![1, 2, 3],
+                pdr: 0.1,
+            },
+        ];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Duplicate node ID found: [{}]", DUPLICATE_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_duplicate_id_2() {
+        const DUPLICATE_ID: NodeId = 70;
+
+        let drone = vec![];
+        let client = vec![
+            Client {
+                id: DUPLICATE_ID,
+                connected_drone_ids: vec![1, 2],
+            },
+            Client {
+                id: DUPLICATE_ID,
+                connected_drone_ids: vec![1, 2],
+            },
+        ];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Duplicate node ID found: [{}]", DUPLICATE_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_duplicate_id_3() {
+        const DUPLICATE_ID: NodeId = 70;
+
+        let drone = vec![];
+        let client = vec![];
+        let server = vec![
+            Server {
+                id: DUPLICATE_ID,
+                connected_drone_ids: vec![1, 2, 3],
+            },
+            Server {
+                id: DUPLICATE_ID,
+                connected_drone_ids: vec![1, 2, 3],
+            },
+        ];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Duplicate node ID found: [{}]", DUPLICATE_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_invalid_pdr_1() {
+        const INVALID_PDR: f32 = -0.1;
+        const DRONE_ID: NodeId = 70;
+        let drone = vec![Drone {
+            id: DRONE_ID,
+            connected_node_ids: vec![1, 2, 3],
+            pdr: INVALID_PDR,
+        }];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Invalid PDR for drone [{}]: {}",
+                DRONE_ID, INVALID_PDR
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_invalid_pdr_2() {
+        const INVALID_PDR: f32 = 1.1;
+        const DRONE_ID: NodeId = 70;
+        let drone = vec![Drone {
+            id: DRONE_ID,
+            connected_node_ids: vec![1, 2, 3],
+            pdr: INVALID_PDR,
+        }];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Invalid PDR for drone [{}]: {}",
+                DRONE_ID, INVALID_PDR
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_drone_self_connection() {
+        const DRONE_ID: NodeId = 70;
+        let drone = vec![Drone {
+            id: DRONE_ID,
+            connected_node_ids: vec![DRONE_ID],
+            pdr: 0.1,
+        }];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Drone [{}] is connected to itself", DRONE_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_drone_duplicate_neighbor() {
+        const DRONE_ID: NodeId = 70;
+        const DUPLICATE_ID: NodeId = 71;
+        let drone = vec![Drone {
+            id: DRONE_ID,
+            connected_node_ids: vec![DUPLICATE_ID, DUPLICATE_ID],
+            pdr: 0.1,
+        }];
+        let client = vec![];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Drone [{}] has duplicate neighbor [{}]",
+                DRONE_ID, DUPLICATE_ID
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_client_neighbor_cardinality_1() {
+        const CLIENT_ID: NodeId = 70;
+        let drone = vec![];
+        let client = vec![Client {
+            id: CLIENT_ID,
+            connected_drone_ids: vec![],
+        }];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Client [{}] is connected to 0 drones", CLIENT_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_client_neighbor_cardinality_2() {
+        const CLIENT_ID: NodeId = 70;
+        let drone = vec![];
+        let client = vec![Client {
+            id: CLIENT_ID,
+            connected_drone_ids: vec![71, 72, 73],
+        }];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Client [{}] has more than 2 neighbors", CLIENT_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_client_self_connection() {
+        const CLIENT_ID: NodeId = 70;
+        let drone = vec![];
+        let client = vec![Client {
+            id: CLIENT_ID,
+            connected_drone_ids: vec![CLIENT_ID],
+        }];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Client [{}] is connected to itself", CLIENT_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_client_duplicate_neighbor() {
+        const CLIENT_ID: NodeId = 70;
+        const DUPLICATE_ID: NodeId = 71;
+        let drone = vec![];
+        let client = vec![Client {
+            id: CLIENT_ID,
+            connected_drone_ids: vec![DUPLICATE_ID, DUPLICATE_ID],
+        }];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Client [{}] has duplicate neighbor [{}]",
+                CLIENT_ID, DUPLICATE_ID
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_server_neighbor_cardinality() {
+        const SERVER_ID: NodeId = 70;
+        const DRONE_ID: NodeId = 71;
+        let drone = vec![];
+        let client = vec![];
+        let server = vec![Server {
+            id: SERVER_ID,
+            connected_drone_ids: vec![DRONE_ID],
+        }];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Server [{}] has less than 2 neighbors", SERVER_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_server_self_connection() {
+        const SERVER_ID: NodeId = 70;
+        const DRONE_ID: NodeId = 70;
+        let drone = vec![];
+        let client = vec![];
+        let server = vec![Server {
+            id: SERVER_ID,
+            connected_drone_ids: vec![SERVER_ID, DRONE_ID],
+        }];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!("Server [{}] is connected to itself", SERVER_ID))
+        );
+    }
+
+    #[test]
+    fn test_validate_server_duplicate_neighbor() {
+        const SERVER_ID: NodeId = 70;
+        const DUPLICATE_ID: NodeId = 71;
+        let drone = vec![];
+        let client = vec![];
+        let server = vec![Server {
+            id: SERVER_ID,
+            connected_drone_ids: vec![DUPLICATE_ID, DUPLICATE_ID],
+        }];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Server [{}] has duplicate neighbor [{}]",
+                SERVER_ID, DUPLICATE_ID
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_client_client_connection() {
+        const CLIENT_1_ID: NodeId = 71;
+        const CLIENT_2_ID: NodeId = 72;
+        const DRONE_ID: NodeId = 73;
+        let drone = vec![];
+        let client = vec![
+            Client {
+                id: CLIENT_1_ID,
+                connected_drone_ids: vec![CLIENT_2_ID],
+            },
+            Client {
+                id: CLIENT_2_ID,
+                connected_drone_ids: vec![DRONE_ID],
+            },
+        ];
+        let server = vec![];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Client [{}] is connected to [{}], which is not a drone",
+                CLIENT_1_ID, CLIENT_2_ID
+            ))
+        );
+    }
+
+    #[test]
+    fn test_validate_client_server_connection() {
+        const CLIENT_ID: NodeId = 71;
+        const SERVER_ID: NodeId = 72;
+        const DRONE_1_ID: NodeId = 73;
+        const DRONE_2_ID: NodeId = 74;
+        let drone = vec![];
+        let client = vec![
+            Client {
+                id: CLIENT_ID,
+                connected_drone_ids: vec![SERVER_ID],
+            },
+        ];
+        let server = vec![
+            Server {
+                id: SERVER_ID,
+                connected_drone_ids: vec![DRONE_1_ID, DRONE_2_ID],
+            },
+        ];
+        let config_before = Config {
+            drone,
+            client,
+            server,
+        };
+
+        let result = validate_config(&config_before);
+
+        assert_eq!(
+            result,
+            Err(format!(
+                "Client [{}] is connected to [{}], which is not a drone",
+                CLIENT_ID, SERVER_ID
+            ))
+        );
     }
 }

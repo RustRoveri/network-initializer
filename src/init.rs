@@ -3,71 +3,84 @@ use std::{collections::HashMap, thread};
 use client::Client;
 use crossbeam_channel::{Receiver, Sender};
 use fixedbitset::FixedBitSet;
-use rust_roveri_api::{ClientChannels, ClientCommand, ClientEvent, ClientGuiMessage, ClientType, Command, Distros, DroneChannels, DroneImpl, GUIChannels, GUIRequest, GUIResponse, GuiClientMessage, InitData, NodeType, ServerChannels, ServerCommand, ServerEvent, ServerType, MAX_CLIENT_TYPES, MAX_IMPL, MAX_NODES, MAX_SERVER_TYPES};
+use rust_roveri_api::{
+    ClientChannels, ClientCommand, ClientEvent, ClientGuiMessage, ClientType, Command, Distros,
+    DroneChannels, DroneImpl, GuiClientMessage, InitData, NodeType, ServerChannels, ServerCommand,
+    ServerEvent, ServerType, MAX_CLIENT_TYPES, MAX_IMPL, MAX_NODES, MAX_SERVER_TYPES,
+};
 use server::Server;
 use simulation_controller::factory::function::factory_drone;
-use wg_2024::{config::Config, controller::{DroneCommand, DroneEvent}, network::NodeId, packet::Packet};
+use wg_2024::{
+    config::Config,
+    controller::{DroneCommand, DroneEvent},
+    network::NodeId,
+    packet::Packet,
+};
 
 pub struct NetworkInitData {
     pub init_data: InitData,
     pub drone_channels: DroneChannels,
     pub client_channels: ClientChannels,
     pub server_channels: ServerChannels,
-    pub list_gui_channels: Vec<(NodeId, ClientType, Sender<GuiClientMessage>, Receiver<ClientGuiMessage>)>,
-    pub distros: Distros
+    pub list_gui_channels: Vec<(
+        NodeId,
+        ClientType,
+        Sender<GuiClientMessage>,
+        Receiver<ClientGuiMessage>,
+    )>,
+    pub distros: Distros,
 }
 
 impl NetworkInitData {
     pub fn new(
         init_data: InitData,
-        drone_channels: DroneChannels, 
-        client_channels: ClientChannels, 
-        server_channels: ServerChannels, 
-        list_gui_channels: Vec<(NodeId, ClientType, Sender<GuiClientMessage>, Receiver<ClientGuiMessage>)>,
-        distros: Distros
+        drone_channels: DroneChannels,
+        client_channels: ClientChannels,
+        server_channels: ServerChannels,
+        list_gui_channels: Vec<(
+            NodeId,
+            ClientType,
+            Sender<GuiClientMessage>,
+            Receiver<ClientGuiMessage>,
+        )>,
+        distros: Distros,
     ) -> Self {
         Self {
-            init_data, 
-            drone_channels, 
-            client_channels, 
+            init_data,
+            drone_channels,
+            client_channels,
             server_channels,
             list_gui_channels,
-            distros
+            distros,
         }
     }
 }
 
-
 pub fn network_init(config: &Config) -> NetworkInitData {
     // Create network topology data for the SC
-    let mut topology: [(NodeType, FixedBitSet); MAX_NODES] = std::array::from_fn(|_index| {
-        (NodeType::None, FixedBitSet::with_capacity(MAX_NODES))
-    });
-    let mut senders: [Command; MAX_NODES] = std::array::from_fn(|_index| {
-        Command::None
-    });
-    let mut packet_send_map: [Option<Sender<Packet>>; MAX_NODES] = std::array::from_fn(|_index| {
-        None
-    });
+    let mut topology: [(NodeType, FixedBitSet); MAX_NODES] =
+        std::array::from_fn(|_index| (NodeType::None, FixedBitSet::with_capacity(MAX_NODES)));
+    let mut senders: [Command; MAX_NODES] = std::array::from_fn(|_index| Command::None);
+    let mut packet_send_map: [Option<Sender<Packet>>; MAX_NODES] =
+        std::array::from_fn(|_index| None);
 
-    // Create channels for the SC to handle node events 
+    // Create channels for the SC to handle node events
     let (drone_sender, drone_receiver) = crossbeam_channel::unbounded::<DroneEvent>();
     let (client_sender, client_receiver) = crossbeam_channel::unbounded::<ClientEvent>();
     let (server_sender, server_receiver) = crossbeam_channel::unbounded::<ServerEvent>();
-    
-    // Create distributions for the SC
-    let mut drones_distro: [usize; MAX_IMPL] = std::array::from_fn(|_index| { 
-        0
-    });
-    let mut clients_distro: [usize; MAX_CLIENT_TYPES] = std::array::from_fn(|_index| {
-        0
-    });
-    let mut servers_distro: [usize; MAX_SERVER_TYPES] = std::array::from_fn(|_index| {
-        0
-    });
 
-    // Create array to store the gui_channels for clients 
-    let mut list_gui_channels:Vec<(NodeId, ClientType, Sender<GuiClientMessage>, Receiver<ClientGuiMessage>)> = Vec::with_capacity(config.client.len());
+    // Create distributions for the SC
+    let mut drones_distro: [usize; MAX_IMPL] = std::array::from_fn(|_index| 0);
+    let mut clients_distro: [usize; MAX_CLIENT_TYPES] = std::array::from_fn(|_index| 0);
+    let mut servers_distro: [usize; MAX_SERVER_TYPES] = std::array::from_fn(|_index| 0);
+
+    // Create array to store the gui_channels for clients
+    let mut list_gui_channels: Vec<(
+        NodeId,
+        ClientType,
+        Sender<GuiClientMessage>,
+        Receiver<ClientGuiMessage>,
+    )> = Vec::with_capacity(config.client.len());
 
     let mut index_drone_impl = 0;
     let mut index_client_types = 0;
@@ -84,12 +97,20 @@ pub fn network_init(config: &Config) -> NetworkInitData {
         drones_distro[index_drone_impl] += 1;
         index_drone_impl += 1;
         index_drone_impl %= MAX_IMPL;
-        topology[drone.id as usize].0 = NodeType::Drone(drone_impl);
+        topology[drone.id as usize].0 = NodeType::Drone(drone.pdr, drone_impl);
 
         // Spawn drone
         let sender = drone_sender.clone();
         thread::spawn(move || {
-            let mut drone = factory_drone(drone_impl, drone.id, sender, rx_command, rx_packet, HashMap::new(), drone.pdr);
+            let mut drone = factory_drone(
+                drone_impl,
+                drone.id,
+                sender,
+                rx_command,
+                rx_packet,
+                HashMap::new(),
+                drone.pdr,
+            );
             drone.run();
         });
     }
@@ -98,8 +119,10 @@ pub fn network_init(config: &Config) -> NetworkInitData {
     for client in config.client.iter().cloned() {
         let (sx_command, rx_command) = crossbeam_channel::unbounded::<ClientCommand>();
         let (sx_packet, rx_packet) = crossbeam_channel::unbounded::<Packet>();
-        let (message_sender_tx, message_sender_rx) = crossbeam_channel::unbounded::<GuiClientMessage>();
-        let (message_receiver_tx, message_receiver_rx) = crossbeam_channel::unbounded::<ClientGuiMessage>();
+        let (message_sender_tx, message_sender_rx) =
+            crossbeam_channel::unbounded::<GuiClientMessage>();
+        let (message_receiver_tx, message_receiver_rx) =
+            crossbeam_channel::unbounded::<ClientGuiMessage>();
 
         senders[client.id as usize] = Command::ClientCommand(sx_command);
         packet_send_map[client.id as usize] = Some(sx_packet);
@@ -108,12 +131,24 @@ pub fn network_init(config: &Config) -> NetworkInitData {
         index_client_types += 1;
         index_client_types %= MAX_CLIENT_TYPES;
         topology[client.id as usize].0 = NodeType::Client(client_type);
-        list_gui_channels.push((client.id, client_type, message_sender_tx, message_receiver_rx));
+        list_gui_channels.push((
+            client.id,
+            client_type,
+            message_sender_tx,
+            message_receiver_rx,
+        ));
 
         // Spawn client
         let sender = client_sender.clone();
         thread::spawn(move || {
-            let mut client = Client::new(client.id, rx_packet, rx_command, sender, message_sender_rx, message_receiver_tx);
+            let mut client = Client::new(
+                client.id,
+                rx_packet,
+                rx_command,
+                sender,
+                message_sender_rx,
+                message_receiver_tx,
+            );
             client.run();
         });
     }
@@ -131,7 +166,7 @@ pub fn network_init(config: &Config) -> NetworkInitData {
         index_server_types %= MAX_SERVER_TYPES;
         topology[server.id as usize].0 = NodeType::Server(server_type);
 
-        // Spawn server 
+        // Spawn server
         let sender = server_sender.clone();
         thread::spawn(move || {
             let mut server = Server::new(server.id, rx_command, rx_packet, sender, server_type);
@@ -144,7 +179,13 @@ pub fn network_init(config: &Config) -> NetworkInitData {
             // Update topology
             topology[drone.id as usize].1.insert(*neighbor as usize);
             if let Command::DroneCommand(sender) = &senders[drone.id as usize] {
-                let _ = sender.send(DroneCommand::AddSender(*neighbor, packet_send_map[*neighbor as usize].as_ref().unwrap().clone()));
+                let _ = sender.send(DroneCommand::AddSender(
+                    *neighbor,
+                    packet_send_map[*neighbor as usize]
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
+                ));
             }
         }
     }
@@ -153,7 +194,13 @@ pub fn network_init(config: &Config) -> NetworkInitData {
             // Update topology
             topology[client.id as usize].1.insert(*neighbor as usize);
             if let Command::ClientCommand(sender) = &senders[client.id as usize] {
-                let _ = sender.send(ClientCommand::AddDrone(*neighbor, packet_send_map[*neighbor as usize].as_ref().unwrap().clone()));
+                let _ = sender.send(ClientCommand::AddDrone(
+                    *neighbor,
+                    packet_send_map[*neighbor as usize]
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
+                ));
             }
         }
     }
@@ -162,12 +209,18 @@ pub fn network_init(config: &Config) -> NetworkInitData {
             // Update topology
             topology[server.id as usize].1.insert(*neighbor as usize);
             if let Command::ServerCommand(sender) = &senders[server.id as usize] {
-                let _ = sender.send(ServerCommand::AddDrone(*neighbor, packet_send_map[*neighbor as usize].as_ref().unwrap().clone()));
+                let _ = sender.send(ServerCommand::AddDrone(
+                    *neighbor,
+                    packet_send_map[*neighbor as usize]
+                        .as_ref()
+                        .unwrap()
+                        .clone(),
+                ));
             }
         }
     }
 
-    // Create InitData 
+    // Create InitData
     let init_data = InitData::new(topology, senders, packet_send_map);
     // Create DroneChannels
     let drone_channels = DroneChannels::new(drone_receiver, drone_sender);
@@ -180,11 +233,11 @@ pub fn network_init(config: &Config) -> NetworkInitData {
 
     // Create NetworkInitData
     NetworkInitData::new(
-        init_data, 
-        drone_channels, 
-        client_channels, 
-        server_channels, 
-        list_gui_channels, 
-        distros
+        init_data,
+        drone_channels,
+        client_channels,
+        server_channels,
+        list_gui_channels,
+        distros,
     )
 }

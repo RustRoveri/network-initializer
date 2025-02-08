@@ -7,13 +7,12 @@ use wg_2024::config::{Client, Config, Drone, Server};
 type Graph = [FixedBitSet; MAX_NODES];
 
 /// Compute the initialization of the network.   
-/// 
-/// # Parameters 
+///
+/// # Parameters
 /// - `file_path` - Path of the configuration file.
 pub fn network_validate(file_path: &str) -> Result<Config, String> {
     // Deserializing the config file
-    let config_data =
-        fs::read_to_string(file_path)
+    let config_data = fs::read_to_string(file_path)
         .map_err(|_| "Unable to read configuration file".to_string())?;
     let config: Config =
         toml::from_str(&config_data).map_err(|e| format!("Failed to deserialize TOML: {}", e))?;
@@ -25,11 +24,11 @@ pub fn network_validate(file_path: &str) -> Result<Config, String> {
 }
 
 /// Checks if the config. file encodes a proper network topology.  
-/// 
-/// # Parameters 
-/// - `config` - The configuration of the network. 
-/// 
-/// # Performance 
+///
+/// # Parameters
+/// - `config` - The configuration of the network.
+///
+/// # Performance
 /// - `O(n + m)`, where `n` and `m` are the number of nodes and edges in the network, respectively.
 fn validate_config(config: &Config) -> Result<(), String> {
     let mut n_nodes = 0;
@@ -39,7 +38,7 @@ fn validate_config(config: &Config) -> Result<(), String> {
     // Validate drones
     for drone in &config.drone {
         validate_drone(drone)?;
-        if  node_ids.contains(drone.id as usize) {
+        if node_ids.contains(drone.id as usize) {
             return Err(format!("Duplicate node ID found: [{}]", drone.id).into());
         } else {
             node_ids.insert(drone.id as usize);
@@ -91,11 +90,11 @@ fn validate_config(config: &Config) -> Result<(), String> {
 }
 
 /// Checks if the drone has a proper PDR and if its neighbors list does not contain duplicates.   
-/// 
+///
 /// # Parameter
 /// - `drone` - Drone to be checked.
-/// 
-/// # Performance 
+///
+/// # Performance
 /// - `O(n)`, where `n` is the number of nodes in the network.
 fn validate_drone(drone: &Drone) -> Result<(), String> {
     // Checks if the PDR is in bounds
@@ -110,9 +109,9 @@ fn validate_drone(drone: &Drone) -> Result<(), String> {
             return Err(format!("Drone [{}] is connected to itself", drone.id).into());
         }
         if set.contains(*connected_id as usize) {
-            return Err(format!("Drone [{}] has [{}] as duplicate in its neighbors list", 
-                drone.id,
-                *connected_id
+            return Err(format!(
+                "Drone [{}] has [{}] as duplicate in its neighbors list",
+                drone.id, *connected_id
             ));
         }
         set.insert(*connected_id as usize);
@@ -123,11 +122,11 @@ fn validate_drone(drone: &Drone) -> Result<(), String> {
 
 /// Checks if the client is connected to at least 1 node and at max 2 nodes, and that its neighbors list does not   
 /// contain duplicates.  
-/// 
-/// # Parameters 
+///
+/// # Parameters
 /// - `client` - Client to be checked.
-/// 
-/// # Performance 
+///
+/// # Performance
 /// - `O(n)`, where `n` is the number of nodes in the network.
 fn validate_client(client: &Client) -> Result<(), String> {
     // Checks if the server is connected to 0 drones
@@ -146,12 +145,12 @@ fn validate_client(client: &Client) -> Result<(), String> {
             return Err(format!("Client [{}] is connected to itself", client.id).into());
         }
         if set.contains(*connected_id as usize) {
-            return Err(format!("Client [{}] has a duplicate in its neighbors list: [{}]", 
-                client.id,
-                *connected_id
+            return Err(format!(
+                "Client [{}] has a duplicate in its neighbors list: [{}]",
+                client.id, *connected_id
             ));
         }
-        set.insert(*connected_id as usize);   
+        set.insert(*connected_id as usize);
     }
 
     Ok(())
@@ -159,11 +158,11 @@ fn validate_client(client: &Client) -> Result<(), String> {
 
 /// Checks if the server is connected to at least 2 nodes, and that its neighbors list does not   
 /// contain duplicates.  
-/// 
-/// # Parameters 
+///
+/// # Parameters
 /// - `server` - Server to be checked.
-/// 
-/// # Performance 
+///
+/// # Performance
 /// - `O(n)`, where `n` is the number of nodes in the network.
 fn validate_server(server: &Server) -> Result<(), String> {
     // Checks if the server is connected to n > 2 drones
@@ -178,24 +177,24 @@ fn validate_server(server: &Server) -> Result<(), String> {
             return Err(format!("Server [{}] is connected to itself", server.id).into());
         }
         if set.contains(*connected_id as usize) {
-            return Err(format!("Server [{}] has a duplicate in its neighbors list: [{}]", 
-                server.id,
-                *connected_id
+            return Err(format!(
+                "Server [{}] has a duplicate in its neighbors list: [{}]",
+                server.id, *connected_id
             ));
         }
-        set.insert(*connected_id as usize);   
+        set.insert(*connected_id as usize);
     }
 
     Ok(())
 }
 
 /// For every server and client checks if their neighbors list contains only ids of drones.   
-/// 
-/// # Parameters 
+///
+/// # Parameters
 /// - `config` - The configuration of the topology.
-/// - `drone_ids` - Set with all the drone ids. 
-/// 
-/// # Performance 
+/// - `drone_ids` - Set with all the drone ids.
+///
+/// # Performance
 /// - `O(n + m)`, where `n` and `m` are the number of nodes and edges in the network, respectively.
 fn validate_all_neighbors_are_drones(
     config: &Config,
@@ -207,8 +206,7 @@ fn validate_all_neighbors_are_drones(
             if !drone_ids.contains(*id as usize) {
                 return Err(format!(
                     "Client [{}] is connected to [{}], which is not a drone",
-                    client.id,
-                    *id
+                    client.id, *id
                 )
                 .into());
             }
@@ -221,8 +219,7 @@ fn validate_all_neighbors_are_drones(
             if !drone_ids.contains(*id as usize) {
                 return Err(format!(
                     "Server [{}] is connected to [{}], which is not a drone",
-                    server.id,
-                    *id
+                    server.id, *id
                 )
                 .into());
             }
@@ -233,12 +230,12 @@ fn validate_all_neighbors_are_drones(
 }
 
 /// Creates the graph of the network.   
-/// 
-/// # Parameters 
+///
+/// # Parameters
 /// - `graph` - Mutable reference to the graph.
 /// - `config` - Configuration of the network.
-/// 
-/// # Performance 
+///
+/// # Performance
 /// - `O(n + m)`, where `n` and `m` are the number of nodes and edges in the network, respectively.
 fn compute_init_graph(graph: &mut Graph, config: &Config) {
     // Stores the drones and their connections
@@ -264,12 +261,12 @@ fn compute_init_graph(graph: &mut Graph, config: &Config) {
 }
 
 /// Checks if the graph of the network is bidirectional.  
-/// 
-/// # Parameters 
+///
+/// # Parameters
 /// - `graph` - Graph representing the network.
 /// - `node_ids` - Every node id in the network.
-/// 
-/// # Performance 
+///
+/// # Performance
 /// - `O(n + m)`, where `n` and `m` are the number of nodes and edges in the network, respectively.
 fn validate_bidirectional_graph(graph: &Graph, node_ids: &FixedBitSet) -> Result<(), String> {
     for node in node_ids.ones() {
@@ -279,8 +276,7 @@ fn validate_bidirectional_graph(graph: &Graph, node_ids: &FixedBitSet) -> Result
             if !node_ids.contains(id) {
                 return Err(format!(
                     "Node [{}] has [{}] as neighbor, which does not exist in the topology.",
-                    node,
-                    id
+                    node, id
                 )
                 .into());
             }
@@ -298,16 +294,20 @@ fn validate_bidirectional_graph(graph: &Graph, node_ids: &FixedBitSet) -> Result
     Ok(())
 }
 
-/// Checks if the network graph is connected, ie it has only one connected component. 
-/// 
-/// # Parameters 
-/// - `graph` - Graph of the network. 
+/// Checks if the network graph is connected, ie it has only one connected component.
+///
+/// # Parameters
+/// - `graph` - Graph of the network.
 /// - `node_ids` - Set of all the node ids in the network.
 /// - `n_nodes` - Number of nodes in the network.
-/// 
-/// # Performance 
+///
+/// # Performance
 /// - `O(n + m)`, where `n` and `m` are the number of nodes and edges in the network, respectively.
-fn validate_connected_graph(graph: &Graph, node_ids: &FixedBitSet, n_nodes: usize) -> Result<(), String> {
+fn validate_connected_graph(
+    graph: &Graph,
+    node_ids: &FixedBitSet,
+    n_nodes: usize,
+) -> Result<(), String> {
     if n_nodes == 0 {
         return Ok(());
     }
@@ -315,7 +315,7 @@ fn validate_connected_graph(graph: &Graph, node_ids: &FixedBitSet, n_nodes: usiz
     let mut visited = FixedBitSet::with_capacity(MAX_NODES);
     let mut n_visited = 0;
     let node = node_ids.ones().next().unwrap();
-    
+
     // Compute a bfs starting from `node`
     let mut queue = VecDeque::with_capacity(MAX_NODES);
     queue.push_back(node);
@@ -337,26 +337,24 @@ fn validate_connected_graph(graph: &Graph, node_ids: &FixedBitSet, n_nodes: usiz
     if n_visited == n_nodes {
         Ok(())
     } else {
-        Err("The network topology is not connected"
-            .to_string()
-            .into())
+        Err("The network topology is not connected".to_string().into())
     }
 }
 
 /// Checks if all clients and servers are at the edge of the newtork.   
-/// 
-/// # Parameters 
-/// - `graph` - Graph of the network. 
+///
+/// # Parameters
+/// - `graph` - Graph of the network.
 /// - `drone_ids` - Set of all the drone ids in the network.
-/// - `n_drones` - Number of drones in the network. 
-/// 
-/// # Performance 
+/// - `n_drones` - Number of drones in the network.
+///
+/// # Performance
 /// - `O(n + m)`, where `n` and `m` are the number of nodes and edges in the network, respectively.  
 fn validate_edges_clients_servers(
     graph: &Graph,
     drone_ids: &FixedBitSet,
     n_nodes: usize,
-    n_drones: usize
+    n_drones: usize,
 ) -> Result<(), String> {
     // There are no nodes in the network
     if n_nodes == 0 {
@@ -370,7 +368,7 @@ fn validate_edges_clients_servers(
     let mut visited = FixedBitSet::with_capacity(MAX_NODES);
     let mut n_visited = 0;
     let drone = drone_ids.ones().next().unwrap();
-    
+
     // Compute a bfs starting from `drone`
     let mut queue = VecDeque::with_capacity(MAX_NODES);
     queue.push_back(drone);

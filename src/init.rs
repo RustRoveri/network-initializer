@@ -17,6 +17,7 @@ use wg_2024::{
     packet::Packet,
 };
 
+#[derive(Clone, Debug)]
 pub struct NetworkInitData {
     pub init_data: InitData,
     pub drone_channels: DroneChannels,

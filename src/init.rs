@@ -38,7 +38,7 @@ impl NetworkInitData {
 }
 
 
-pub fn network_init(config: &Config) -> Result<NetworkInitData, String> {
+pub fn network_init(config: &Config) -> NetworkInitData {
     // Create network topology data for the SC
     let mut topology: [(NodeType, FixedBitSet); MAX_NODES] = std::array::from_fn(|_index| {
         (NodeType::None, FixedBitSet::with_capacity(MAX_NODES))
@@ -179,14 +179,12 @@ pub fn network_init(config: &Config) -> Result<NetworkInitData, String> {
     let distros = Distros::new(drones_distro, clients_distro, servers_distro);
 
     // Create NetworkInitData
-    let res = NetworkInitData::new(
+    NetworkInitData::new(
         init_data, 
         drone_channels, 
         client_channels, 
         server_channels, 
         list_gui_channels, 
         distros
-    );
-
-    Ok(res)
+    )
 }

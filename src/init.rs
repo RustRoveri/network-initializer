@@ -4,12 +4,10 @@ use client::Client;
 use crossbeam_channel::{Receiver, Sender};
 use fixedbitset::FixedBitSet;
 use rust_roveri_api::{
-    ClientChannels, ClientCommand, ClientEvent, ClientGuiMessage, ClientType, Command, Distros,
-    DroneChannels, DroneImpl, GuiClientMessage, InitData, NodeType, ServerChannels, ServerCommand,
-    ServerEvent, ServerType, MAX_CLIENT_TYPES, MAX_IMPL, MAX_NODES, MAX_SERVER_TYPES,
+    ClientChannels, ClientCommand, ClientEvent, ClientGuiMessage, ClientType, Command, Distros, DroneChannels, DroneImpl, GUIChannels, GUIRequest, GUIResponse, GuiClientMessage, InitData, NodeType, ServerChannels, ServerCommand, ServerEvent, ServerType, MAX_CLIENT_TYPES, MAX_IMPL, MAX_NODES, MAX_SERVER_TYPES
 };
 use server::Server;
-use simulation_controller::factory::function::factory_drone;
+use simulation_controller::{core::sc::SimulationController, factory::function::factory_drone};
 use wg_2024::{
     config::Config,
     controller::{DroneCommand, DroneEvent},
@@ -26,24 +24,13 @@ use wg_2024::{
 #[derive(Clone, Debug)]
 pub struct NetworkInitData {
     /// The initial network topology (nodes and their sender map).
-    pub init_data: InitData,
-    /// Channels for drone event communication.
-    pub drone_channels: DroneChannels,
-    /// Channels for client event communication.
-    pub client_channels: ClientChannels,
-    /// Channels for server event communication.
-    pub server_channels: ServerChannels,
-    /// For each client node, a tuple containing:
-    /// `(NodeId, ClientType, Sender<GuiClientMessage>, Receiver<ClientGuiMessage>)`.
-    /// These channels are used to spawn the corresponding client GUI (Browser or Chat).
+    pub topology: [(NodeType, FixedBitSet); MAX_NODES],
     pub list_gui_channels: Vec<(
         NodeId,
         ClientType,
         Sender<GuiClientMessage>,
         Receiver<ClientGuiMessage>,
     )>,
-    /// Distribution data for drones, clients, and servers.
-    pub distros: Distros,
 }
 
 impl NetworkInitData {
@@ -59,25 +46,17 @@ impl NetworkInitData {
     /// - `list_gui_channels`: A list of tuples for each client containing its ID, type, and GUI messaging channels.
     /// - `distros`: Distribution data for node types.
     pub fn new(
-        init_data: InitData,
-        drone_channels: DroneChannels,
-        client_channels: ClientChannels,
-        server_channels: ServerChannels,
+        topology: [(NodeType, FixedBitSet); MAX_NODES],
         list_gui_channels: Vec<(
             NodeId,
             ClientType,
             Sender<GuiClientMessage>,
             Receiver<ClientGuiMessage>,
-        )>,
-        distros: Distros,
+        )>
     ) -> Self {
         Self {
-            init_data,
-            drone_channels,
-            client_channels,
-            server_channels,
+            topology,
             list_gui_channels,
-            distros,
         }
     }
 }
@@ -294,13 +273,26 @@ pub fn network_init(config: &Config) -> NetworkInitData {
     // Create distribution data.
     let distros = Distros::new(drones_distro, clients_distro, servers_distro);
 
-    // Assemble and return the complete network initialization data.
+    let (sx_gui_request, rx_gui_request) = crossbeam_channel::unbounded::<GUIRequest>();
+    let (sx_gui_response, rx_gui_response) = crossbeam_channel::unbounded::<GUIResponse>();
+    let gui_channels = GUIChannels::new(rx_gui_request, sx_gui_response);
+
+    // Spawn the SC
+    thread::spawn(move || {
+        let mut sc = SimulationController::new(
+            init_data,
+            drone_channels,
+            client_channels,
+            server_channels,
+            gui_channels,
+            &distros,
+        );
+        sc.run();
+    });
+
     NetworkInitData::new(
-        init_data,
-        drone_channels,
-        client_channels,
-        server_channels,
+        topology, 
         list_gui_channels,
-        distros,
+        
     )
 }

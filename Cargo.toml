@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 rust-roveri-api = { git = "ssh://git@github.com/RustRoveri/rust-roveri-api.git" }
-simulation-controller = { git = "ssh://git@github.com/RustRoveri/simulation-controller.git" }
+simulation-controller = { git = "ssh://git@github.com/RustRoveri/rust-roveri-sc.git" }
 client = { git = "ssh://git@github.com/RustRoveri/client.git" } 
 server = { git = "ssh://git@github.com/RustRoveri/server.git" }
 

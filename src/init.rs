@@ -4,7 +4,7 @@ use client::Client;
 use crossbeam_channel::{Receiver, Sender};
 use fixedbitset::FixedBitSet;
 use rust_roveri_api::{
-    ClientChannels, ClientCommand, ClientEvent, ClientGuiMessage, ClientType, Command, Distros, DroneChannels, DroneImpl, GUIChannels, GUIRequest, GUIResponse, GuiClientMessage, InitData, NodeType, ServerChannels, ServerCommand, ServerEvent, ServerType, MAX_CLIENT_TYPES, MAX_IMPL, MAX_NODES, MAX_SERVER_TYPES
+    ClientChannels, ClientCommand, ClientEvent, ClientGuiMessage, ClientType, Command, Distros, DroneChannels, DroneImpl, GUIChannels, GUIRequest, GUIResponse, GuiClientMessage, InitData, NodeType, SCChannels, ServerChannels, ServerCommand, ServerEvent, ServerType, MAX_CLIENT_TYPES, MAX_IMPL, MAX_NODES, MAX_SERVER_TYPES
 };
 use server::Server;
 use simulation_controller::{core::sc::SimulationController, factory::function::factory_drone};
@@ -31,6 +31,7 @@ pub struct NetworkInitData {
         Sender<GuiClientMessage>,
         Receiver<ClientGuiMessage>,
     )>,
+    pub gui_channels: GUIChannels
 }
 
 impl NetworkInitData {
@@ -52,11 +53,13 @@ impl NetworkInitData {
             ClientType,
             Sender<GuiClientMessage>,
             Receiver<ClientGuiMessage>,
-        )>
+        )>,
+        gui_channels: GUIChannels
     ) -> Self {
         Self {
             topology,
             list_gui_channels,
+            gui_channels
         }
     }
 }
@@ -265,7 +268,7 @@ pub fn network_init(config: &Config) -> NetworkInitData {
     }
 
     // Create the initial data structure for the simulation controller.
-    let init_data = InitData::new(topology, senders, packet_send_map);
+    let init_data = InitData::new(topology.clone(), senders, packet_send_map);
     // Create communication channel wrappers.
     let drone_channels = DroneChannels::new(drone_receiver, drone_sender);
     let client_channels = ClientChannels::new(client_receiver, client_sender);
@@ -275,7 +278,8 @@ pub fn network_init(config: &Config) -> NetworkInitData {
 
     let (sx_gui_request, rx_gui_request) = crossbeam_channel::unbounded::<GUIRequest>();
     let (sx_gui_response, rx_gui_response) = crossbeam_channel::unbounded::<GUIResponse>();
-    let gui_channels = GUIChannels::new(rx_gui_request, sx_gui_response);
+    let sc_channels = SCChannels::new(rx_gui_request, sx_gui_response);
+    let gui_channels = GUIChannels::new(rx_gui_response, sx_gui_request);
 
     // Spawn the SC
     thread::spawn(move || {
@@ -284,15 +288,15 @@ pub fn network_init(config: &Config) -> NetworkInitData {
             drone_channels,
             client_channels,
             server_channels,
-            gui_channels,
+            sc_channels,
             &distros,
         );
         sc.run();
     });
 
     NetworkInitData::new(
-        topology, 
+        topology,
         list_gui_channels,
-        
+        gui_channels
     )
 }
